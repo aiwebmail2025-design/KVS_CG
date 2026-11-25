@@ -57,7 +57,7 @@ button{cursor:pointer;width:auto}button.p{background:var(--m);color:#fff;border-
 <aside>
 <header class="brand"><div class="top"><div class="lg"><img src="https://cdnbbsr.s3waas.gov.in/s3kv012c4c7762fb5f87b5ff040e09f8d2/uploads/2023/04/2023042118.svg" alt="KVS logo" onerror="this.parentNode.style.visibility='hidden'"></div><div><div class="kv">★ KVS ★</div><h1>KVS<span>Certificate Studio</span></h1></div><div class="lg"><img src="https://cdnbbsr.s3waas.gov.in/s3kv012c4c7762fb5f87b5ff040e09f8d2/uploads/2024/06/2024061218.png" alt="Kendriya Vidyalaya logo" onerror="this.parentNode.style.visibility='hidden'"></div></div><div class="rule"></div><div class="by">Created by</div><div class="nm">Mrs. Chhayaben Ankitkumar Patel</div><div class="rl">PRT</div><a href="https://mrcahmedabad.kvs.ac.in/" target="_blank" rel="noopener">PM Shri Kendriya Vidyalaya No. 1 Shahibaug, Ahmedabad</a></header>
 <select id="tpl" hidden><option value="kv">KVS</select>
-<div class="bar"><button class="p" id="bPng">Export PNG</button><button class="p" id="bPdf">Export PDF</button><button id="bPrint">Print</button></div>
+<div class="bar"><button class="p" id="bPng">Export PNG</button><button class="p" id="bPdf">Export JPEG</button><button id="bPrint">Print</button></div>
 <div class="bar"><button id="bSample">Sample data</button><button id="bLong">Long-text test</button><button id="bClear">Clear</button></div>
 <h2>Principal signature</h2>
 <label title="Use a transparent PNG of the signature for the best print quality.">Upload signature (PNG or JPG) ⓘ</label>
@@ -86,7 +86,7 @@ button{cursor:pointer;width:auto}button.p{background:var(--m);color:#fff;border-
 <div class="bar"><button id="bRf">Reset field</button><button id="bRa">Reset all positions</button><label style="margin:0;display:flex;gap:5px;align-items:center"><input type="checkbox" id="box" checked>Show field boxes</label></div>
 <h2>Settings</h2>
 <label class="sw"><input type="checkbox" id="it"><span class="tg"></span>Italic text (on by default)</label>
-<div class="row"><div><label>Export quality</label><select id="qd"><option value="200">200 dpi (smaller)<option value="300">300 dpi (print)</select></div><div><label>Bulk output</label><select id="qo"><option value="pdf">PDF per person (ZIP)<option value="one">One combined PDF<option value="png">PNG images (ZIP)</select></div></div>
+<div class="row"><div><label>Export quality</label><select id="qd"><option value="200">200 dpi (smaller)<option value="300">300 dpi (print)</select></div><div><label>Bulk output</label><select id="qo"><option value="jpeg">JPEG images (ZIP)<option value="png">PNG images (ZIP)</select></div></div>
 <p class="hint">Arrow keys nudge the selected field (Shift = 5 px). Text auto-shrinks only when it would not fit its blank; boxes and guides never appear in exports. Layout and details are saved in this browser.</p>
 </aside>
 <main><canvas id="cv" width="2400" height="1697"></canvas><p class="hint">Preview is the exact A4 landscape page that is exported and printed.</p></main>
@@ -100,7 +100,7 @@ const NAVY='#0b53f9',def=s=>({dx:0,dy:0,size:s[7],weight:700,align:'center',colo
 const DK='certStudio.v2.data',SK='certStudio.v3.settings';
 const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-let D=ld(DK,{}),S={},sel='e_name',LK='',curRow=-1;const ST={italic:true,dpi:300,out:'pdf',srm:true,sst:50,pname:'',...ld(SK,{})};let SIGN=null,signSrc=null;
+let D=ld(DK,{}),S={},sel='e_name',LK='',curRow=-1;const ST={italic:true,dpi:300,out:'jpeg',srm:true,sst:50,pname:'',...ld(SK,{})};if(ST.out!=='png')ST.out='jpeg';let SIGN=null,signSrc=null;
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const $=i=>document.getElementById(i);
 const val=s=>{if(s[2]==='pname')return ST.pname||'';const[,,k,l]=s;const bi=IN.find(i=>i[0]===k)?.[2];return(l==='hi'&&bi?(D[k+'_hi']||D[k]):D[k])||''};
@@ -161,8 +161,27 @@ async function page(W=Math.round(11.693*ST.dpi),H=Math.round(8.268*ST.dpi),c){aw
 const clean=t=>(t||'').replace(/[^\w\u0900-\u097F]+/g,'_').replace(/^_+|_+$/g,'');
 const fn=ext=>{const n=clean(D.name)||'Participant',p=clean(D.prog).slice(0,60).replace(/_+$/,'');return(p?n+'_'+p:n)+'.'+ext};
 const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)};
+// High-quality JPEG export: target about 170 KB and keep each file at or below 190 KB.
+async function jpegBlob(source){
+ const TARGET=170*1024,MIN=150*1024,MAX=190*1024;
+ let w=source.width,h=source.height,work=document.createElement('canvas');
+ for(let resize=0;resize<8;resize++){
+  work.width=w;work.height=h;const ctx=work.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(source,0,0,w,h);
+  let lo=.35,hi=.98,best=null;
+  for(let n=0;n<10;n++){
+   const q=(lo+hi)/2,blob=await new Promise(resolve=>work.toBlob(resolve,'image/jpeg',q));
+   if(!blob)throw new Error('JPEG conversion failed.');
+   if(blob.size<=MAX){best=blob;lo=q;if(blob.size>=MIN && blob.size<=TARGET)break;}
+   else hi=q;
+  }
+  if(best && (best.size>=MIN || resize===7))return best;
+  if(best)return best;
+  w=Math.round(w*.88);h=Math.round(h*.88);
+ }
+ throw new Error('Could not compress certificate below 190 KB.');
+}
 $('bPng').onclick=async()=>(await page()).toBlob(b=>dl(b,fn('png')));
-$('bPdf').onclick=async()=>{const c=await page(),p=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});p.addImage(c.toDataURL('image/png'),'PNG',0,0,297,210,undefined,'FAST');p.save(fn('pdf'))};
+$('bPdf').onclick=async()=>{const c=await page(),b=await jpegBlob(c);dl(b,fn('jpg'))};
 $('bPrint').onclick=async()=>{$('pi').src=(await page()).toDataURL('image/png');setTimeout(()=>window.print(),250)};
 // fonts: load before first paint of text, redraw when ready
 ['700 28px "Noto Sans Devanagari"','500 28px "Noto Sans Devanagari"','700 28px "EB Garamond"'].forEach(f=>document.fonts.load(f,'अAa').then(()=>draw()));
@@ -253,12 +272,12 @@ async function report(log,m){
  pages.forEach((p,i)=>{const q=p.getContext('2d');q.font=FT(400,22);q.fillStyle='#777';q.textAlign='center';q.fillText(`Page ${i+1} of ${pages.length}`,PW/2,PH-50)});
  const d=new window.jspdf.jsPDF({unit:'mm',format:'a4'});pages.forEach((p,i)=>{if(i)d.addPage();d.addImage(p.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297,undefined,'FAST')});
  return d.output('blob')}
-// ===== bulk generation with progress popup
+// ===== bulk JPEG/PNG generation with progress popup
 const bCan=$('bCan');let cancel=false;bCan.onclick=()=>{cancel=true;bCan.disabled=true};
 const stamp=()=>new Date().toISOString().slice(0,16).replace(/[-:]/g,'').replace('T','_');
 $('bGen').onclick=async()=>{
  const total=ROWS.length,W=Math.round(11.693*ST.dpi),H=Math.round(8.268*ST.dpi),bak=D,t0=Date.now(),J=window.jspdf.jsPDF,
-  zip=ST.out==='one'?null:new JSZip(),log=[],used={},cvs=document.createElement('canvas');let comb=null,i=0;
+  zip=new JSZip(),log=[],used={},cvs=document.createElement('canvas');let i=0;
  cancel=false;bCan.disabled=false;$('mt').textContent='Generating certificates';$('ms').textContent='Preparing fonts…';$('pf').style.width='0';
  $('mc').textContent='0 / '+total;$('mp').textContent='0%';$('me').textContent='Time left: calculating…';$('mb').replaceChildren(bCan);$('md').hidden=false;
  await document.fonts.ready;
@@ -267,8 +286,7 @@ $('bGen').onclick=async()=>{
   else{await page(W,H,cvs);
    const b0=clean(nm)+(r.prog?'_'+clean(r.prog).slice(0,60):'');let f=b0,k=1;while(used[f])f=b0+'_'+(++k);used[f]=1;
    if(ST.out==='png')zip.file(f+'.png',await new Promise(z=>cvs.toBlob(z)));
-   else{let p;if(ST.out==='one'){if(comb)comb.addPage();else comb=new J({orientation:'landscape',unit:'mm',format:'a4'});p=comb}else p=new J({orientation:'landscape',unit:'mm',format:'a4'});
-    p.addImage(cvs.toDataURL('image/png'),'PNG',0,0,297,210,undefined,'FAST');if(zip)zip.file(f+'.pdf',p.output('blob'))}
+   else zip.file(f+'.jpg',await jpegBlob(cvs));
    log.push({row:i+1,name:nm,prog:(r.prog||'').trim()})}
   const done=i+1,el=(Date.now()-t0)/1000;
   $('ms').textContent='Now: '+(nm||'(skipped, empty name)');$('pf').style.width=(done/total*100)+'%';$('mc').textContent=`${done} / ${total}`;
@@ -278,11 +296,11 @@ $('bGen').onclick=async()=>{
  $('ms').textContent='Building report…';
  const rep=await report(log,{total,secs,cancelled:cancel});let out=null;
  if(zip){zip.file('Certificate_Report.pdf',rep);if(gen)out=await zip.generateAsync({type:'blob',compression:'STORE'},m=>{$('ms').textContent='Packing files… '+Math.round(m.percent)+'%'})}
- else if(comb)out=comb.output('blob');
+ 
  const st=stamp(),btn=(t,fn,p)=>{const b=document.createElement('button');b.textContent=t;if(p)b.className='p';b.onclick=fn;return b};
  $('mt').textContent=cancel?'Stopped early':'All done';$('me').textContent='Time taken: '+fmt(secs);$('pf').style.width=(i/total*100)+'%';
  $('ms').textContent=`${gen} certificate(s) generated, ${log.length-gen} skipped.`+(cancel?` Stopped after ${i} of ${total}.`:'');
- const bs=[];if(out)bs.push(btn(ST.out==='one'?'Download certificates (PDF)':'Download certificates (ZIP)',()=>dl(out,'Certificates_'+stamp()+(ST.out==='one'?'.pdf':'.zip')),1));
+ const bs=[];if(out)bs.push(btn('Download certificates (ZIP)',()=>dl(out,'Certificates_'+stamp()+'.zip'),1));
  bs.push(btn('Download report (PDF)',()=>dl(rep,'Certificate_Report_'+st+'.pdf')),btn('Close',()=>{$('md').hidden=true}));$('mb').replaceChildren(...bs)};
 
 // ===== principal signature (upload, background removal, trim) + principal name
